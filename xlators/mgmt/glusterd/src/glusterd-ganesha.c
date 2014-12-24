@@ -19,6 +19,15 @@
 #include <sys/wait.h>
 #include <dlfcn.h>
 
+#define GANESHA_HA_CONF  "/etc/ganesha/ganesha-ha.conf"
+
+struct ganesha_host {
+	char *host;
+	struct list_head list_host;
+};
+
+int get_host_from_haconfig(glusterd_volinfo_t *volinfo, dict_t *dict);
+
 int check_dbus_config()
 {
 return 1;
@@ -97,6 +106,7 @@ int start_ganesha(dict_t *dict, glusterd_volinfo_t *volinfo)
 runner_t                runner                     = {0,};
 int ret = -1;
 char key[1024] = {0,};
+char *hostname = NULL;
 long int i =1;
 dict_t *vol_opts =  NULL;
 glusterd_volinfo_t *volinfo1 = NULL;
@@ -105,12 +115,19 @@ dict_t *dict1 = NULL;
 char *volname =  NULL;
 glusterd_conf_t *priv = NULL;
 
+
+
 priv =  THIS->private;
 GF_ASSERT(priv);
 
 dict1 = dict_new();
-if (!dict)
+if (!dict1)
         goto out;
+
+get_host_from_haconfig(volinfo,dict);
+
+
+
 
 //vol_opts = volinfo->dict;
 
@@ -210,12 +227,64 @@ glusterd_check_if_ganesha_trans_enabled (glusterd_volinfo_t *volinfo)
         if (flag == _gf_false) {
                 ret = -1;
                 goto out;
-        }
+       }
         ret = 0;
 out:
         return ret;
 }
 
+
+int32_t
+ get_host_from_haconfig (glusterd_volinfo_t *volinfo, dict_t *dict )
+{
+FILE *fp;
+char buf[40];
+
+glusterd_brickinfo_t *brickinfo = NULL;
+int ret = -1;
+
+
+
+fp = fopen (GANESHA_HA_CONF,"r");
+
+if ( fp == NULL)
+{
+	gf_log ( "",GF_LOG_INFO,"couldn't open the file");
+	return 1;
+}
+//Read the hostname of the current node
+list_for_each_entry (brickinfo, &volinfo->bricks, brick_list)
+	{
+		gf_log("",GF_LOG_INFO,"the hostname is %s", brickinfo->hostname);
+		if (!uuid_compare( brickinfo->uuid,MY_UUID)) {
+		gf_log("",GF_LOG_INFO, "it is the local node");
+		// Reading GANESHA_HA_CONF to get the host names listed
+	while ( fgets ( buf, 30, fp ) != NULL)
+	{
+
+	gf_log("",GF_LOG_INFO, "the value is %s", buf);
+	//key = ( void *) buf;
+	//list = &key;
+	//list_add_tail(&hlist->list_host,list);
+	ret = gf_strip_whitespace (buf, strlen (buf));
+        if (ret == -1)
+              goto out;
+        if (strcmp( buf, brickinfo->hostname) == 0)
+	{
+	gf_log("",GF_LOG_INFO,"the host is %s", buf);
+	}
+
+		 
+}
+fclose(fp);
+break;
+	}
+}
+
+out:return 1;
+
+
+}
 
 
 
