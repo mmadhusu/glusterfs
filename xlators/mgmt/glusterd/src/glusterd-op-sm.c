@@ -1841,6 +1841,13 @@ glusterd_op_set_all_volume_options (xlator_t *this, dict_t *dict)
                 goto out;
         }
 
+	if ( strcmp( key, "features.ganesha") == 0 )
+	{
+		ret = 0;
+		gf_log("",GF_LOG_INFO, "global option ganehsa");
+	}
+
+
         ret = -1;
         dup_opt = dict_new ();
         if (!dup_opt)
@@ -2015,12 +2022,9 @@ glusterd_op_set_volume (dict_t *dict, char **errstr)
                  if ((strncmp (key, "ganesha",7) == 0) ||
                 (strcmp (key, "features.ganesha") == 0)) {
                 ret =  glusterd_check_ganesha_cmd(key,value,errstr,dict,volinfo);
+		}
                 if ( ret == -1)
-                        {
-                                ret = -1;
-                                goto out;
-                }
-                 }
+                  	goto out;
 
 
                 if (!is_key_glusterd_hooks_friendly (key)) {

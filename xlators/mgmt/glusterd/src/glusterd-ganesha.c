@@ -36,54 +36,104 @@ return 1;
 
 int create_export_config(char *volname)
 {
-runner_t                runner                     = {0,};
-int ret = -1;
-runinit (&runner);
-gf_log("",GF_LOG_INFO,"running create_EXPORT");
-runner_add_args (&runner, "sh", "/etc/ganesha/create_export.sh",volname,NULL);
-ret = runner_run_nowait(&runner);
-return 1;
+	runner_t                runner                     = {0,};
+	int ret = -1;
+	runinit (&runner);
+	gf_log("",GF_LOG_INFO,"running create_EXPORT");
+	runner_add_args (&runner, "sh", "/etc/ganesha/create_export.sh",volname,NULL);
+	ret = runner_run(&runner);
+	return 1;
 }
 
-int  ganesha_add_export(char *volname)
+int  ganesha_manage_export(char *volname,glusterd_volinfo_t *volinfo, char *value, char **op_errstr)
 {
-runner_t runner = {0,};
-int ret = -1;
-runinit (&runner);
-create_export_config(volname);
-gf_log("",GF_LOG_INFO,"runing dbus send");
-runner_add_args (&runner, "sh", "/etc/ganesha/dbus-send.sh", "add", volname ,NULL);
-ret = runner_run_nowait(&runner);
-return ret;
+	runner_t runner = {0,};
+	int ret = -1;
+	runinit (&runner);
+	FILE *fp;
+	char buf[40];
+
+	glusterd_brickinfo_t *brickinfo = NULL;
+
+	fp = fopen (GANESHA_HA_CONF,"r");
+
+	if ( fp == NULL)
+	{
+        	gf_log ( "",GF_LOG_INFO,"couldn't open the file");
+        	return 1;
+	}
+
+	//Read the hostname of the current node
+	list_for_each_entry (brickinfo, &volinfo->bricks, brick_list)
+        {
+                gf_log("",GF_LOG_INFO,"the hostname is %s", brickinfo->hostname);
+                if (!uuid_compare( brickinfo->uuid,MY_UUID)) {
+                gf_log("",GF_LOG_INFO, "it is the local node");
+                // Reading GANESHA_HA_CONF to get the host names listed
+        while ( fgets ( buf, 30, fp ) != NULL)
+        {
+
+        gf_log("",GF_LOG_INFO, "the value is %s", buf);
+        //key = ( void *) buf;
+        //list = &key;
+        //list_add_tail(&hlist->list_host,list);
+        ret = gf_strip_whitespace (buf, strlen (buf));
+        if (ret == -1)
+              goto out;
+        if (strcmp( buf, brickinfo->hostname) == 0)
+        {
+	if ( strcmp (value,"on") == 0)
+	create_export_config(volname);
+        gf_log("",GF_LOG_INFO,"runing dbus send");
+	gf_log("",GF_LOG_INFO," the value on/off is %s", value);
+        runner_add_args (&runner, "sh", "/etc/ganesha/dbus-send.sh", value, volname ,NULL);
+        ret = runner_run(&runner);
+	gf_log("", GF_LOG_INFO," the return value is %d ", ret);
+        //return ret;
+	gf_log("",GF_LOG_INFO,"the host is %s", buf);
+        }
+
+ 
+	}
+	fclose(fp);
+	break;
+        }
+}
+
+if ( ret == -1)
+
+gf_asprintf(op_errstr, "Dynamic export addition/deletion failed. Please see log file for details");
+
+out:return ret;
 }
 
 int tear_down_cluster(dict_t *dict)
 {
-int ret = -1;
-runner_t runner = {0,};
-if (is_origin_glusterd(dict))
-{
-gf_log ( "",GF_LOG_INFO,"before teardown");
-runinit (&runner);
-runner_add_args (&runner, "sh","/etc/ganesha/ganesha-ha.sh","teardown",NULL);
-ret = runner_run_nowait(&runner);
-return ret;
-}
-return 1;
+	int ret = -1;
+	runner_t runner = {0,};
+	if (is_origin_glusterd(dict))
+	{
+	gf_log ( "",GF_LOG_INFO,"before teardown");
+	runinit (&runner);
+	runner_add_args (&runner, "sh","/etc/ganesha/ganesha-ha.sh","teardown",NULL);
+	ret = runner_run_nowait(&runner);
+	return ret;
+	}
+	return 1;
 }
 
 int setup_cluster(dict_t *dict)
 {
-int ret = -1;
-runner_t runner = {0,};
-if (is_origin_glusterd(dict))
-{
+	int ret = -1;
+	runner_t runner = {0,};
+	if (is_origin_glusterd(dict))
+	{
         gf_log ("",GF_LOG_INFO, "I am originator glusterd");
-       runinit (&runner);
-       runner_add_args (&runner, "sh","/etc/ganesha/ganesha-ha.sh","setup",NULL);
+        runinit (&runner);
+        runner_add_args (&runner, "sh","/etc/ganesha/ganesha-ha.sh","setup",NULL);
 
-ret =  runner_run_nowait(&runner);
-return ret;
+	ret =  runner_run_nowait(&runner);
+	return ret;
 }
 return 1;
 }
@@ -91,78 +141,39 @@ return 1;
 
 int stop_ganesha(dict_t *dict,char **op_errstr)
 {
-runner_t                runner                     = {0,};
-int ret = -1;
-tear_down_cluster(dict);
-runinit (&runner);
-runner_add_args (&runner, "pkill", "ganesha.nfsd",NULL);
-ret = runner_run_nowait(&runner);
-return ret;
+	runner_t                runner                     = {0,};
+	int ret = -1;
+	tear_down_cluster(dict);
+	runinit (&runner);
+	runner_add_args (&runner, "pkill", "ganesha.nfsd",NULL);
+	ret = runner_run_nowait(&runner);
+	return ret;
 }
 
 int start_ganesha(dict_t *dict, glusterd_volinfo_t *volinfo)
 {
 
-runner_t                runner                     = {0,};
-int ret = -1;
-char key[1024] = {0,};
-char *hostname = NULL;
-long int i =1;
-dict_t *vol_opts =  NULL;
-glusterd_volinfo_t *volinfo1 = NULL;
-int count =0;
-dict_t *dict1 = NULL;
-char *volname =  NULL;
-glusterd_conf_t *priv = NULL;
+	runner_t                runner                     = {0,};
+	int ret = -1;
+	char key[1024] = {0,};
+	char *hostname = NULL;
+	long int i =1;
+	dict_t *vol_opts =  NULL;
+	glusterd_volinfo_t *volinfo1 = NULL;
+	int count =0;
+	dict_t *dict1 = NULL;
+	char *volname =  NULL;
+	glusterd_conf_t *priv = NULL;
 
 
 
-priv =  THIS->private;
-GF_ASSERT(priv);
+	priv =  THIS->private;
+	GF_ASSERT(priv);
 
-dict1 = dict_new();
-if (!dict1)
-        goto out;
-
-get_host_from_haconfig(volinfo,dict);
-
-
-
-
-//vol_opts = volinfo->dict;
-
-/*ret = dict_get_int32 (dict, key, &volcount);
-gf_log ("", GF_LOG_INFO, "number of volumes is %d", volcount);
-        if (ret) {
-                gf_log ("", GF_LOG_INFO, "failed to get volcount");
-                goto out;
-        }
-        if (volcount <= 0) {
-                ret = -1;
-                goto out;
-        }
-
-for (i = 1; i <= volcount; i++) {
-                snprintf (key, sizeof (key), "volname%ld", i);
-                ret = dict_get_str (dict, key, &volname);
-                if (ret) {
-                        gf_log ("", GF_LOG_ERROR, "failed to get the "
-                                "volname");
-                        goto out;
-                }
-
-                ret = glusterd_volinfo_find (volname, &volinfo1);
-                if (ret) {
-                        gf_log ("", GF_LOG_ERROR, "volinfo for %s "
-                                "not found", volname);
-                        goto out;
-                }
-                vol_opts = volinfo1->dict;
-                ret = dict_set_str(vol_opts, "nfs.disable","on");
-}
-*/
-//runinit (&runner);
-        list_for_each_entry(volinfo1,&priv->volumes, vol_list) {
+	dict1 = dict_new();
+	if (!dict1)
+        	goto out;
+ list_for_each_entry(volinfo1,&priv->volumes, vol_list) {
                 memset (key, 0, sizeof (key));
                 snprintf (key, sizeof (key), "volume%d", count);
                 ret = dict_set_str (dict1, key, volinfo1->volname);
@@ -170,6 +181,7 @@ for (i = 1; i <= volcount; i++) {
                         goto out;
                 vol_opts = volinfo1->dict;
                 ret = dict_set_str(vol_opts, "nfs.disable","on");
+		ret = dict_set_str(vol_opts, "features.ganesha","on");
 
                 count++;
 
@@ -181,19 +193,10 @@ runner_add_args (&runner, "/usr/bin/ganesha.nfsd",
                          "-L", "/nfs-ganesha-op.log",
                          "-f","/etc/ganesha/nfs-ganesha.conf","-N", "NIV_FULL_DEBUG",NULL);
 ret =  runner_run_nowait(&runner);
-ret = setup_cluster(dict);
-out : return ret;
+//ret = setup_cluster(dict);
+out : return 1;
 }
 
-
-/*int ganesha_add_export()
-{
-        int ret = -1;
-        ret = ganesha_add_export();
-        gf_log("",GF_LOG_INFO,"ganesha starts returns %d",ret);
-        return ret;
-}
-*/
 int ganesha_remove_export()
 {
 return 1;
@@ -204,12 +207,10 @@ int ganesha_export_entry( char *volname, char **op_errstr,dict_t *dict, glusterd
         int ret = -1;
 
      //   ret = create_export_config(volname);
-      //  ret =  start_ganesha(volname);
-       // ret =  ganesha_add_export(dict,volinfo);
-        return 1;
+     //         //  ret =  start_ganesha(volname);
+     //                // ret =  ganesha_add_export(dict,volinfo);
+               return 1;
 }
-
-
 
 int32_t
 glusterd_check_if_ganesha_trans_enabled (glusterd_volinfo_t *volinfo)
@@ -234,60 +235,6 @@ out:
 }
 
 
-int32_t
- get_host_from_haconfig (glusterd_volinfo_t *volinfo, dict_t *dict )
-{
-FILE *fp;
-char buf[40];
-
-glusterd_brickinfo_t *brickinfo = NULL;
-int ret = -1;
-
-
-
-fp = fopen (GANESHA_HA_CONF,"r");
-
-if ( fp == NULL)
-{
-	gf_log ( "",GF_LOG_INFO,"couldn't open the file");
-	return 1;
-}
-//Read the hostname of the current node
-list_for_each_entry (brickinfo, &volinfo->bricks, brick_list)
-	{
-		gf_log("",GF_LOG_INFO,"the hostname is %s", brickinfo->hostname);
-		if (!uuid_compare( brickinfo->uuid,MY_UUID)) {
-		gf_log("",GF_LOG_INFO, "it is the local node");
-		// Reading GANESHA_HA_CONF to get the host names listed
-	while ( fgets ( buf, 30, fp ) != NULL)
-	{
-
-	gf_log("",GF_LOG_INFO, "the value is %s", buf);
-	//key = ( void *) buf;
-	//list = &key;
-	//list_add_tail(&hlist->list_host,list);
-	ret = gf_strip_whitespace (buf, strlen (buf));
-        if (ret == -1)
-              goto out;
-        if (strcmp( buf, brickinfo->hostname) == 0)
-	{
-	gf_log("",GF_LOG_INFO,"the host is %s", buf);
-	}
-
-		 
-}
-fclose(fp);
-break;
-	}
-}
-
-out:return 1;
-
-
-}
-
-
-
 int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key,char *value, glusterd_volinfo_t *volinfo)
 {
 
@@ -301,15 +248,15 @@ int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key,char *va
         GF_ASSERT(dict);
         GF_ASSERT(op_errstr);
         //gf_asprintf(op_errstr, "ganesha volume failed");
-       //return -1;
+        //       //return -1;
         ret = dict_get_str (dict, "volname", &volname);
-        if (ret) {
-                gf_log (this->name, GF_LOG_ERROR, "Unable to get volume name");
-                goto out;
-        }
-
-
-  /*      switch (1)
+                  if (ret) {
+                    gf_log (this->name, GF_LOG_ERROR, "Unable to get volume name");
+                             goto out;
+                            }
+	
+        
+  /*   switch (1)
         {
                 case 1 :
                         ret =  ganesha_export_entry(volname,op_errstr,dict,volinfo);
@@ -330,7 +277,7 @@ int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key,char *va
         {
         if (strcmp (value,"on") == 0)
         {
-                ret =  ganesha_add_export(volname);
+                ret =  ganesha_manage_export(volname,volinfo,value,op_errstr);
 
                         if ( ret < 0 )
                                 goto out;
@@ -338,7 +285,8 @@ int glusterd_handle_ganesha_op(dict_t *dict, char **op_errstr,char *key,char *va
 
         else
         {
-                ret = stop_ganesha (dict,op_errstr);
+                //ret = stop_ganesha (dict,op_errstr);
+                ret = ganesha_manage_export(volname,volinfo,value,op_errstr);
                         if ( ret < 0)
                                 goto out;
         }
