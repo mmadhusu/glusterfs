@@ -51,9 +51,12 @@
 #define ALL_VOLUME_OPTION_CHECK(volname, key, ret, op_errstr, label)           \
         do {                                                                   \
                 gf_boolean_t    _all = !strcmp ("all", volname);               \
-                gf_boolean_t    _ratio = !strcmp (key,                         \
-                                                  GLUSTERD_QUORUM_RATIO_KEY);  \
-                if (_all && !_ratio) {                                         \
+                gf_boolean_t    _ratio = _gf_false;                             \
+		if ( (strcmp ( key, GLUSTERD_QUORUM_RATIO_KEY) == 0) ||        \
+			(strcmp (key, "features.ganesha") == 0) )	       \
+		{	_ratio = _gf_true;				       \
+		}								\
+                if (_all && !_ratio) {                                          \
                         ret = -1;                                              \
                         *op_errstr = gf_strdup ("Not a valid option for all "  \
                                                 "volumes");                    \
@@ -462,11 +465,17 @@ glusterd_check_ganesha_cmd (char *key, char *value, char **errstr, dict_t *dict,
            (strcmp (key, "features.ganesha") == 0)) {
                 gf_log ("", GF_LOG_INFO,"ganesha command found");
                 ret = gf_string2boolean (value, &b);
-                ret = glusterd_handle_ganesha_op(dict,errstr,key,value,volinfo);
+                ret = glusterd_handle_ganesha_op(dict,errstr,key,value);
 
 
         }
         return ret;
+}
+static int 
+glusterd_handle_ganesha_cmd (dict_t *dict, char **errstr)
+{
+
+return 1;
 }
 
 
@@ -936,6 +945,12 @@ glusterd_op_stage_set_volume (dict_t *dict, char **op_errstr)
                                 local_new_op_version = local_key_op_version;
                         goto cont;
                 }
+
+			if ( strcmp (key, "features.ganesha") == 0)
+			{
+				gf_log ("",GF_LOG_INFO, "all key of nfs-ganesha ");
+			}
+
 
                 ALL_VOLUME_OPTION_CHECK (volname, key, ret, op_errstr, out);
                 ret = glusterd_validate_quorum_options (this, key, value,
@@ -1784,7 +1799,7 @@ out:
 }
 
 static int
-glusterd_op_set_all_volume_options (xlator_t *this, dict_t *dict)
+glusterd_op_set_all_volume_options (xlator_t *this, dict_t *dict, char ** op_errstr)
 {
         char            *key            = NULL;
         char            *key_fixed      = NULL;
@@ -1843,8 +1858,9 @@ glusterd_op_set_all_volume_options (xlator_t *this, dict_t *dict)
 
 	if ( strcmp( key, "features.ganesha") == 0 )
 	{
-		ret = 0;
-		gf_log("",GF_LOG_INFO, "global option ganehsa");
+		ret = glusterd_handle_ganesha_op(dict,op_errstr,key,value);
+		if ( ret == -1)
+			goto out;
 	}
 
 
@@ -1956,7 +1972,7 @@ glusterd_op_set_volume (dict_t *dict, char **errstr)
         }
 
         if (strcasecmp (volname, "all") == 0) {
-                ret = glusterd_op_set_all_volume_options (this, dict);
+                ret = glusterd_op_set_all_volume_options (this, dict, &op_errstr);
                 goto out;
         }
 

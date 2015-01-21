@@ -98,13 +98,13 @@ struct volume_options options[] = {
         {
          .key = {"features.ganesha"},
          .default_value = "off",
-         .type = GF_OPTION_TYPE_ANY,
+         .type =  GF_OPTION_TYPE_BOOL,
          .description= "enable translator"
 
         },
         { .key  = {"ganesha.enable"},
           .default_value = "off",
-          .type = GF_OPTION_TYPE_ANY,
+          .type =  GF_OPTION_TYPE_BOOL,
           .description = "export the volume in question via ganesha"
         },
         { .key  = {NULL}
